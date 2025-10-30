@@ -105,8 +105,15 @@ def register_presentation_tools(app: FastMCP, presentations: Dict, get_current_p
         }
 
     @app.tool()
-    def save_presentation(file_path: str, presentation_id: Optional[str] = None) -> Dict:
-        """Save a presentation to a file."""
+    def save_presentation(file_path: Optional[str] = None, presentation_id: Optional[str] = None) -> Dict:
+        """
+        Save a presentation to a file.
+        
+        Args:
+            file_path: Path where to save the presentation. If not provided, auto-generates a filename
+                      in the current directory (e.g., 'presentation_1.pptx')
+            presentation_id: ID of the presentation to save. If not provided, uses current presentation
+        """
         # Use the specified presentation or the current one
         pres_id = presentation_id if presentation_id is not None else get_current_presentation_id()
         
@@ -115,12 +122,17 @@ def register_presentation_tools(app: FastMCP, presentations: Dict, get_current_p
                 "error": "No presentation is currently loaded or the specified ID is invalid"
             }
         
+        # Auto-generate filename if not provided
+        if file_path is None:
+            file_path = f"{pres_id}.pptx"
+        
         # Save the presentation
         try:
             saved_path = ppt_utils.save_presentation(presentations[pres_id], file_path)
             return {
                 "message": f"Presentation saved to {saved_path}",
-                "file_path": saved_path
+                "file_path": saved_path,
+                "auto_generated": file_path == f"{pres_id}.pptx"
             }
         except Exception as e:
             return {
