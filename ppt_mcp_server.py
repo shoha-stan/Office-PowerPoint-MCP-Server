@@ -5,8 +5,13 @@ Consolidated version with 20 tools organized into multiple modules.
 """
 import os
 import argparse
+import contextlib
+import uvicorn
 from typing import Dict, Any
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.routing import Mount, Route
+from starlette.responses import Response
 
 # import utils  # Currently unused
 from tools import (
@@ -402,21 +407,27 @@ def get_server_info() -> Dict:
         ]
     }
 
+# ---- Lifespan Management ----
+@contextlib.asynccontextmanager
+async def lifespan(starlette_app: Starlette):
+    """Manage the lifespan of the Starlette application with FastMCP session."""
+    async with contextlib.AsyncExitStack() as stack:
+        await stack.enter_async_context(app.session_manager.run())
+        yield
+
 # ---- Main Function ----
 def main(transport: str = "stdio", port: int = 8000):
     if transport == "http":
-        import asyncio
-        # Set the port for HTTP transport
-        app.settings.port = port
-        # Start the FastMCP server with HTTP transport
-        try:
-            app.run(transport='streamable-http')
-        except asyncio.exceptions.CancelledError:
-            print("Server stopped by user.")
-        except KeyboardInterrupt:
-            print("Server stopped by user.")
-        except Exception as e:
-            print(f"Error starting server: {e}")
+        # Create Starlette app with streamable HTTP endpoint
+        starlette_app = Starlette(
+            routes=[
+                Route("/", lambda request: Response(status_code=200)),
+                Mount("/ppt", app.streamable_http_app()),
+            ],
+            lifespan=lifespan,
+        )
+        # Run with uvicorn
+        uvicorn.run(starlette_app, port=port, host='0.0.0.0')
             
     elif transport == "sse":
         # Run the FastMCP server in SSE (Server Side Events) mode
